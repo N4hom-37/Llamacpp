@@ -1,4 +1,4 @@
-name: Build Static llama-server (Makefile + Alpine ARM64)
+name: Build Static llama-server (Alpine 3.23 ARM64)
 
 on:
   workflow_dispatch:
@@ -17,23 +17,24 @@ jobs:
       - name: Compile Static Binary
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            # Install build tools and the static version of OpenBLAS
-            apk add --no-cache gcc g++ make openblas-dev openblas linux-headers musl-dev libstdc++ git gfortran pkgconfig && \
+            # Removed openblas-dev to stop the 'Not Found' errors
+            apk add --no-cache gcc g++ make cmake linux-headers musl-dev libstdc++ git && \
             
-            # Use the raw Makefile instead of CMake
-            # We explicitly pass your ARM64 flags and force static linking
-            # LLAMA_SERVER=1 tells the Makefile to build the server binary
-            make -j\$(nproc) llama-server \
-              LLAMA_STATIC=1 \
-              GGML_OPENBLAS=1 \
-              LDFLAGS='-static -L/usr/lib -lopenblas -lgfortran' \
-              GGML_NO_NATIVE=1 \
-              GGML_NEON=1 \
-              GGML_ARM_DOTPROD=0 \
-              GGML_FMA=1 && \
+            cmake -B build \
+              -DLLAMA_STATIC=ON \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DCMAKE_EXE_LINKER_FLAGS='-static' \
+              -DGGML_BLAS=OFF \
+              -DLLAMA_NATIVE=OFF \
+              -DGGML_NATIVE=OFF \
+              -DLLAMA_NEON=ON \
+              -DGGML_ARM_DOTPROD=OFF \
+              -DGGML_ARM_FMA=OFF && \
+            
+            cmake --build build --config Release --target llama-server -j\$(nproc) && \
             
             mkdir -p dist && \
-            cp llama-server dist/ && \
+            cp build/bin/llama-server dist/ && \
             strip dist/llama-server"
 
       - name: Upload Static Server
@@ -41,4 +42,3 @@ jobs:
         with:
           name: llama-server-static-arm64
           path: dist/llama-server
-          
