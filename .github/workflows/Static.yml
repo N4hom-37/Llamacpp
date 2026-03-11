@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-alpine-musl-static:
-    name: Compile Static llama-server (musl) aarch64
+  build-static-server:
+    name: Compile Static llama-server
     runs-on: ubuntu-24.04-arm
     
     steps:
@@ -13,36 +13,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ggerganov/llama.cpp
-          # Note: Remove the 'repository' line above if running directly in your own fork
 
-      - name: Compile Static llama-server inside Alpine Container
+      - name: Compile Static Binary
         run: |
+          # The fix: added 'git' and 'pkgconfig' to ensure discovery of version and BLAS
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            # Install build dependencies (static linking requires static versions of libs if applicable)
-            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ && \
+            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ pkgconfig git && \
             
-            # Configure CMake for a fully static build
             cmake -B build \
               -DLLAMA_STATIC=ON \
               -DBUILD_SHARED_LIBS=OFF \
               -DCMAKE_EXE_LINKER_FLAGS='-static' \
               -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS \
-              -DLLAMA_NATIVE=OFF \
-              -DGGML_NATIVE=OFF \
-              -DLLAMA_NEON=ON \
-              -DGGML_ARM_DOTPROD=OFF \
-              -DGGML_ARM_FMA=OFF && \
+              -DCMAKE_PREFIX_PATH=/usr \
+              -DLLAMA_NATIVE=OFF -DGGML_NATIVE=OFF -DLLAMA_NEON=ON \
+              -DGGML_ARM_DOTPROD=OFF -DGGML_ARM_FMA=OFF && \
             
-            # Build ONLY the llama-server binary to save compilation time
             cmake --build build --config Release --target llama-server -j\$(nproc) && \
             
-            # Prepare for upload
             mkdir -p dist && \
             cp build/bin/llama-server dist/"
 
-      - name: Upload Static llama-server Binary
+      - name: Upload Static Server
         uses: actions/upload-artifact@v4
         with:
-          name: llama-server-alpine-arm64-static
+          name: llama-server-static-arm64
           path: dist/llama-server
-          if-no-files-found: error
