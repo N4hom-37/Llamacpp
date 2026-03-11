@@ -1,28 +1,27 @@
-name: Build Static llama-server (Alpine 3.23 ARM64)
+name: Build Static llama-server (The Universal ARM64 Potato - FINAL)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-static-server:
-    name: Compile Static llama-server
+  build-static:
     runs-on: ubuntu-24.04-arm
-    
     steps:
       - name: Checkout llama.cpp
         uses: actions/checkout@v4
         with:
           repository: ggerganov/llama.cpp
 
-      - name: Compile Static Binary
+      - name: Compile Static Server
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            # Removed openblas-dev to stop the 'Not Found' errors
+            # Standard tools + Git
             apk add --no-cache gcc g++ make cmake linux-headers musl-dev libstdc++ git && \
             
             cmake -B build \
               -DLLAMA_STATIC=ON \
               -DBUILD_SHARED_LIBS=OFF \
+              -DGGML_OPENMP=OFF \
               -DCMAKE_EXE_LINKER_FLAGS='-static' \
               -DGGML_BLAS=OFF \
               -DLLAMA_NATIVE=OFF \
@@ -37,8 +36,8 @@ jobs:
             cp build/bin/llama-server dist/ && \
             strip dist/llama-server"
 
-      - name: Upload Static Server
+      - name: Upload Static Binary
         uses: actions/upload-artifact@v4
         with:
-          name: llama-server-static-arm64
+          name: llama-server-static-final
           path: dist/llama-server
