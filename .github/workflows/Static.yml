@@ -46,3 +46,4 @@ jobs:
         with:
           name: llama-server-static-arm64
           path: dist/llama-server
+          
