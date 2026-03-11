@@ -16,18 +16,23 @@ jobs:
 
       - name: Compile Static Binary
         run: |
-          # The fix: added 'git' and 'pkgconfig' to ensure discovery of version and BLAS
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ pkgconfig git && \
+            # Added gfortran which is often a hidden dependency for OpenBLAS
+            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ pkgconfig git gfortran && \
             
             cmake -B build \
               -DLLAMA_STATIC=ON \
               -DBUILD_SHARED_LIBS=OFF \
               -DCMAKE_EXE_LINKER_FLAGS='-static' \
-              -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS \
-              -DCMAKE_PREFIX_PATH=/usr \
-              -DLLAMA_NATIVE=OFF -DGGML_NATIVE=OFF -DLLAMA_NEON=ON \
-              -DGGML_ARM_DOTPROD=OFF -DGGML_ARM_FMA=OFF && \
+              -DGGML_BLAS=ON \
+              -DGGML_BLAS_VENDOR=OpenBLAS \
+              -DBLAS_LIBRARIES=/usr/lib/libopenblas.a \
+              -DGGML_OPENBLAS_INCLUDE_DIR=/usr/include \
+              -DLLAMA_NATIVE=OFF \
+              -DGGML_NATIVE=OFF \
+              -DLLAMA_NEON=ON \
+              -DGGML_ARM_DOTPROD=OFF \
+              -DGGML_ARM_FMA=OFF && \
             
             cmake --build build --config Release --target llama-server -j\$(nproc) && \
             
@@ -39,3 +44,4 @@ jobs:
         with:
           name: llama-server-static-arm64
           path: dist/llama-server
+          
