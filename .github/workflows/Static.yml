@@ -1,4 +1,4 @@
-name: Build Static llama-server (Alpine 3.23 ARM64)
+name: Build Static llama-server (Makefile + Alpine ARM64)
 
 on:
   workflow_dispatch:
@@ -17,28 +17,23 @@ jobs:
       - name: Compile Static Binary
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            # Install dependencies + gfortran (needed for static OpenBLAS)
-            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ pkgconfig git gfortran && \
+            # Install build tools and the static version of OpenBLAS
+            apk add --no-cache gcc g++ make openblas-dev openblas-static linux-headers musl-dev libstdc++ git gfortran pkgconfig && \
             
-            # We use PKG_CONFIG to find the library to avoid 'No rule to make target'
-            # This is much safer than hardcoding /usr/lib/libopenblas.a
-            cmake -B build \
-              -DLLAMA_STATIC=ON \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DCMAKE_EXE_LINKER_FLAGS='-static' \
-              -DGGML_BLAS=ON \
-              -DGGML_BLAS_VENDOR=OpenBLAS \
-              -DLLAMA_NATIVE=OFF \
-              -DGGML_NATIVE=OFF \
-              -DLLAMA_NEON=ON \
-              -DGGML_ARM_DOTPROD=OFF \
-              -DGGML_ARM_FMA=OFF && \
-            
-            cmake --build build --config Release --target llama-server -j\$(nproc) && \
+            # Use the raw Makefile instead of CMake
+            # We explicitly pass your ARM64 flags and force static linking
+            # LLAMA_SERVER=1 tells the Makefile to build the server binary
+            make -j\$(nproc) llama-server \
+              LLAMA_STATIC=1 \
+              GGML_OPENBLAS=1 \
+              LDFLAGS='-static -L/usr/lib -lopenblas -lgfortran' \
+              GGML_NO_NATIVE=1 \
+              GGML_NEON=1 \
+              GGML_ARM_DOTPROD=0 \
+              GGML_FMA=1 && \
             
             mkdir -p dist && \
-            cp build/bin/llama-server dist/ && \
-            # Strip the binary to reduce size (standard for static builds)
+            cp llama-server dist/ && \
             strip dist/llama-server"
 
       - name: Upload Static Server
