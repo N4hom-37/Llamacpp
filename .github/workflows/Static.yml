@@ -17,17 +17,17 @@ jobs:
       - name: Compile Static Binary
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            # Added gfortran which is often a hidden dependency for OpenBLAS
+            # Install dependencies + gfortran (needed for static OpenBLAS)
             apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ pkgconfig git gfortran && \
             
+            # We use PKG_CONFIG to find the library to avoid 'No rule to make target'
+            # This is much safer than hardcoding /usr/lib/libopenblas.a
             cmake -B build \
               -DLLAMA_STATIC=ON \
               -DBUILD_SHARED_LIBS=OFF \
               -DCMAKE_EXE_LINKER_FLAGS='-static' \
               -DGGML_BLAS=ON \
               -DGGML_BLAS_VENDOR=OpenBLAS \
-              -DBLAS_LIBRARIES=/usr/lib/libopenblas.a \
-              -DGGML_OPENBLAS_INCLUDE_DIR=/usr/include \
               -DLLAMA_NATIVE=OFF \
               -DGGML_NATIVE=OFF \
               -DLLAMA_NEON=ON \
@@ -37,11 +37,12 @@ jobs:
             cmake --build build --config Release --target llama-server -j\$(nproc) && \
             
             mkdir -p dist && \
-            cp build/bin/llama-server dist/"
+            cp build/bin/llama-server dist/ && \
+            # Strip the binary to reduce size (standard for static builds)
+            strip dist/llama-server"
 
       - name: Upload Static Server
         uses: actions/upload-artifact@v4
         with:
           name: llama-server-static-arm64
           path: dist/llama-server
-          
