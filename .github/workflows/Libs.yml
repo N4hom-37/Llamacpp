@@ -1,11 +1,11 @@
-name: Build llama.cpp Shared Libs (Alpine 3.23 ARM64)
+name: Build llama.cpp Shared Bundle (Alpine 3.23 ARM64)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-alpine-musl:
-    name: Compile for Alpine 3.23 (musl) aarch64
+  build-shared:
+    name: Compile Shared Libs, Tools, and Headers
     runs-on: ubuntu-24.04-arm
     
     steps:
@@ -13,29 +13,41 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ggerganov/llama.cpp
-          # Note: If you are running this workflow directly inside your own fork 
-          # of llama.cpp, you can remove the 'repository' line above.
 
-      - name: Compile inside Alpine Container
-        # Mounting the workspace directly (-v) skips the need for a Dockerfile and docker cp
+      - name: Build inside Alpine Container
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
-            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ && \
+            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ git pkgconfig && \
+            
             cmake -B build \
               -DBUILD_SHARED_LIBS=ON \
               -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS \
-              -DLLAMA_NATIVE=OFF \
-              -DGGML_NATIVE=OFF \
-              -DLLAMA_NEON=ON \
-              -DGGML_ARM_DOTPROD=OFF \
-              -DGGML_ARM_FMA=OFF && \
+              -DCMAKE_PREFIX_PATH=/usr \
+              -DLLAMA_NATIVE=OFF -DGGML_NATIVE=OFF -DLLAMA_NEON=ON \
+              -DGGML_ARM_DOTPROD=OFF -DGGML_ARM_FMA=OFF && \
+            
             cmake --build build --config Release -j\$(nproc) && \
-            mkdir -p dist && \
-            find build -name '*.so' -exec cp {} dist/ \;"
+            
+            mkdir -p dist/bin dist/include dist/scripts
+            
+            # 1. Collect all .so files
+            find build -name '*.so' -exec cp {} dist/bin/ \;
+            
+            # 2. Collect header files
+            cp include/*.h dist/include/ 2>/dev/null || true
+            find ggml/include -name '*.h' -exec cp {} dist/include/ \; 2>/dev/null || true
+            
+            # 3. Collect requested binaries
+            [ -f build/bin/llama-quantize ] && cp build/bin/llama-quantize dist/bin/
+            [ -f build/bin/llama-mtmd-cli ] && cp build/bin/llama-mtmd-cli dist/bin/
+            
+            # 4. Include conversion scripts
+            cp convert*.py dist/scripts/ 2>/dev/null || true
+            cp -r gguf-py dist/scripts/ 2>/dev/null || true"
 
-      - name: Upload Shared Libraries
+      - name: Upload Complete Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: llama-cpp-alpine-arm64-so
-          path: dist/*.so
-          if-no-files-found: error
+          name: llama-cpp-shared-bundle-arm64
+          path: dist/
+          
