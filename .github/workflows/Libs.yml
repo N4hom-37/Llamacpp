@@ -1,0 +1,41 @@
+name: Build llama.cpp Shared Libs (Alpine 3.23 ARM64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-alpine-musl:
+    name: Compile for Alpine 3.23 (musl) aarch64
+    runs-on: ubuntu-24.04-arm
+    
+    steps:
+      - name: Checkout llama.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggerganov/llama.cpp
+          # Note: If you are running this workflow directly inside your own fork 
+          # of llama.cpp, you can remove the 'repository' line above.
+
+      - name: Compile inside Alpine Container
+        # Mounting the workspace directly (-v) skips the need for a Dockerfile and docker cp
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
+            apk add --no-cache gcc g++ make cmake openblas-dev linux-headers musl-dev libstdc++ && \
+            cmake -B build \
+              -DBUILD_SHARED_LIBS=ON \
+              -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS \
+              -DLLAMA_NATIVE=OFF \
+              -DGGML_NATIVE=OFF \
+              -DLLAMA_NEON=ON \
+              -DGGML_ARM_DOTPROD=OFF \
+              -DGGML_ARM_FMA=OFF && \
+            cmake --build build --config Release -j\$(nproc) && \
+            mkdir -p dist && \
+            find build -name '*.so' -exec cp {} dist/ \;"
+
+      - name: Upload Shared Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-cpp-alpine-arm64-so
+          path: dist/*.so
+          if-no-files-found: error
