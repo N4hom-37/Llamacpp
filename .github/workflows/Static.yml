@@ -18,7 +18,7 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app alpine:3.23 /bin/sh -c "
             # Install build tools and the static version of OpenBLAS
-            apk add --no-cache gcc g++ make openblas-dev openblas-static linux-headers musl-dev libstdc++ git gfortran pkgconfig && \
+            apk add --no-cache gcc g++ make openblas-dev openblas linux-headers musl-dev libstdc++ git gfortran pkgconfig && \
             
             # Use the raw Makefile instead of CMake
             # We explicitly pass your ARM64 flags and force static linking
